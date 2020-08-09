@@ -50,6 +50,7 @@ function keyDerive(mnemonic, path, password) {
 function keyRecover(privateKey, testnet) {
   // verify format and convert to buffer if needed
   privateKey = tryToPrivateKeyBuffer(privateKey);
+  console.log(privateKey)
   return new ExtendedKey(privateKey, testnet);
 }
 
@@ -92,7 +93,11 @@ function transactionSerializeRaw(message) {
 
   const gaspriceBigInt = new BN(message.gasprice, 10);
   const gaspriceBuffer = gaspriceBigInt.toArrayLike(Buffer, 'be', gaspriceBigInt.byteLength());
-  const gasprice = Buffer.concat([Buffer.from('00', 'hex'), gaspriceBuffer]);
+  let gasprice = Buffer.concat([Buffer.from('00', 'hex'), gaspriceBuffer]);
+
+  if (message.gasprice === "0") {
+    gasprice = Buffer.from("")
+  }
 
   const message_to_encode = [
     0,
@@ -103,7 +108,7 @@ function transactionSerializeRaw(message) {
     gasprice,
     message.gaslimit,
     message.method,
-    Buffer.from(""),
+    Buffer.from(message.params),
   ];
 
   return cbor.serialize(message_to_encode);
@@ -115,6 +120,8 @@ function transactionSerialize(message) {
 }
 
 function transactionParse(cborMessage, testnet) {
+  // FIXME: Check buffer size and extra bytes
+  // https://github.com/dignifiedquire/borc/issues/47
   const decoded = cbor.deserialize(Buffer.from(cborMessage, "hex"));
 
   if (decoded[0] !== 0) {
@@ -122,7 +129,7 @@ function transactionParse(cborMessage, testnet) {
   }
   if (decoded.length < 9) {
     throw new Error(
-      "The cbor is missing some fields... please verify you have 9 fields."
+      "The cbor is missing some fields... please verify you 9 fields."
     );
   }
 
@@ -172,7 +179,7 @@ function transactionSign(unsignedMessage, privateKey) {
 
   signedMessage.message = unsignedMessage;
 
-  // TODO: support BLS scheme
+  // FIXME: only support secp256k1
   signedMessage.signature = {
     data: signature.toString("base64"),
     type: ProtocolIndicator.SECP256K1,
@@ -191,7 +198,7 @@ function transactionSignLotus(unsignedMessage, privateKey) {
       GasPrice: signedMessage.message.gasprice,
       Method: signedMessage.message.method,
       Nonce: signedMessage.message.nonce,
-      Params: signedMessage.message.params,
+      Params: Buffer.from(signedMessage.message.params, "hex").toString("base64"),
       To: signedMessage.message.to,
       Value: signedMessage.message.value,
     },
@@ -247,4 +254,6 @@ module.exports = {
   transactionSignLotus,
   transactionSignRaw,
   verifySignature,
+  addressAsBytes,
+  bytesToAddress,
 };
